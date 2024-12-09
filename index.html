@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appointment Booking</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .calendar {
+            background-color: #2d2d2d;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.1);
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+
+        .calendar-cell {
+            padding: 10px;
+            text-align: center;
+            background-color: #3d3d3d;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .calendar-cell:hover {
+            background-color: #4CAF50;
+        }
+
+        .calendar-cell.booked {
+            background-color: #666;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+
+        .weekday {
+            font-weight: bold;
+            background-color: #4CAF50;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .booking-form {
+            background-color: #2d2d2d;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            background-color: #3d3d3d;
+            border: 1px solid #4d4d4d;
+            color: #ffffff;
+            border-radius: 5px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .tab.active {
+            background-color: #45a049;
+        }
+
+        .bookings-list {
+            background-color: #2d2d2d;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 600px;
+            display: none;
+        }
+
+        .booking-item {
+            background-color: #3d3d3d;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            position: relative;
+        }
+
+        .admin-controls {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            display: none;
+        }
+
+        .admin-mode .admin-controls {
+            display: block;
+        }
+
+        .admin-login {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-login">
+        <button onclick="toggleAdminMode()">Admin Mode</button>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" onclick="showTab('calendar')">Calendar</button>
+        <button class="tab admin-controls" onclick="showTab('bookings')">View Bookings</button>
+        <button class="tab" onclick="showToday()">Today</button>
+    </div>
+
+    <div id="calendarSection">
+        <div class="calendar">
+            <div class="calendar-header">
+                <button onclick="previousMonth()">Previous</button>
+                <h2 id="currentMonth"></h2>
+                <button onclick="nextMonth()">Next</button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+
+        <div class="booking-form" id="bookingForm">
+            <h3>Make Appointment</h3>
+            <input type="text" id="name" placeholder="Your Name">
+            <input type="email" id="email" placeholder="Your Email">
+            <textarea id="notes" placeholder="Additional Notes"></textarea>
+            <button onclick="submitBooking()">Confirm Booking</button>
+        </div>
+    </div>
+
+    <div id="bookingsSection" class="bookings-list">
+        <h2>All Bookings</h2>
+        <div id="bookingsList"></div>
+    </div>
+
+    <script>
+        let currentDate = new Date();
+        let selectedDate = null;
+        let bookedDates = JSON.parse(localStorage.getItem('bookedDates')) || {};
+        let isAdminMode = false;
+        const ADMIN_PASSWORD = "admin123"; // In a real app, this should be properly secured
+
+        function toggleAdminMode() {
+            const password = prompt("Enter admin password:");
+            if (password === ADMIN_PASSWORD) {
+                isAdminMode = !isAdminMode;
+                document.body.classList.toggle('admin-mode');
+                displayBookings();
+                alert(isAdminMode ? "Admin mode activated" : "Admin mode deactivated");
+                document.querySelectorAll('.admin-controls').forEach(el => {
+                    el.style.display = isAdminMode ? 'block' : 'none';
+                });
+            } else {
+                alert("Incorrect password");
+            }
+        }
+
+        function showTab(tabName) {
+            if (!isAdminMode && tabName === 'bookings') return;
+            
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if (tabName === 'calendar') {
+                document.getElementById('calendarSection').style.display = 'block';
+                document.getElementById('bookingsSection').style.display = 'none';
+            } else {
+                document.getElementById('calendarSection').style.display = 'none';
+                document.getElementById('bookingsSection').style.display = 'block';
+                displayBookings();
+            }
+        }
+
+        function showToday() {
+            currentDate = new Date();
+            renderCalendar();
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('calendarSection').style.display = 'block';
+            document.getElementById('bookingsSection').style.display = 'none';
+        }
+
+        function displayBookings() {
+            const bookingsList = document.getElementById('bookingsList');
+            bookingsList.innerHTML = '';
+
+            Object.entries(bookedDates).sort().forEach(([date, booking]) => {
+                const [year, month, day] = date.split('-');
+                const formattedDate = new Date(year, month - 1, day).toLocaleDateString();
+                
+                const bookingDiv = document.createElement('div');
+                bookingDiv.className = 'booking-item';
+                bookingDiv.innerHTML = `
+                    <h3>${formattedDate}</h3>
+                    <p><strong>Name:</strong> ${booking.name}</p>
+                    <p><strong>Email:</strong> ${booking.email}</p>
+                    ${booking.notes ? `<p><strong>Notes:</strong> ${booking.notes}</p>` : ''}
+                    <div class="admin-controls">
+                        <button onclick="editBooking('${date}')">Edit</button>
+                        <button onclick="deleteBooking('${date}')">Delete</button>
+                    </div>
+                `;
+                bookingsList.appendChild(bookingDiv);
+            });
+
+            if (Object.keys(bookedDates).length === 0) {
+                bookingsList.innerHTML = '<p>No bookings found.</p>';
+            }
+        }
+
+        function editBooking(dateString) {
+            if (!isAdminMode) return;
+            
+            const booking = bookedDates[dateString];
+            const newName = prompt("Enter new name:", booking.name);
+            const newEmail = prompt("Enter new email:", booking.email);
+            const newNotes = prompt("Enter new notes:", booking.notes);
+
+            if (newName && newEmail) {
+                bookedDates[dateString] = {
+                    name: newName,
+                    email: newEmail,
+                    notes: newNotes
+                };
+                localStorage.setItem('bookedDates', JSON.stringify(bookedDates));
+                displayBookings();
+                renderCalendar();
+            }
+        }
+
+        function deleteBooking(dateString) {
+            if (!isAdminMode) return;
+            
+            if (confirm("Are you sure you want to delete this booking?")) {
+                delete bookedDates[dateString];
+                localStorage.setItem('bookedDates', JSON.stringify(bookedDates));
+                displayBookings();
+                renderCalendar();
+            }
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            const monthYear = document.getElementById('currentMonth');
+            
+            grid.innerHTML = '';
+            
+            monthYear.textContent = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+            const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            weekdays.forEach(day => {
+                const cell = document.createElement('div');
+                cell.className = 'calendar-cell weekday';
+                cell.textContent = day;
+                grid.appendChild(cell);
+            });
+
+            const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            
+            for (let i = 0; i < firstDay.getDay(); i++) {
+                const cell = document.createElement('div');
+                cell.className = 'calendar-cell';
+                grid.appendChild(cell);
+            }
+
+            for (let day = 1; day <= lastDay.getDate(); day++) {
+                const cell = document.createElement('div');
+                cell.className = 'calendar-cell';
+                cell.textContent = day;
+                
+                const dateString = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}-${day}`;
+                if (bookedDates[dateString]) {
+                    cell.classList.add('booked');
+                    cell.onclick = () => {
+                        if (isAdminMode) {
+                            showBookingDetails(dateString);
+                        } else {
+                            alert('This date is already booked.');
+                        }
+                    };
+                } else {
+                    cell.onclick = () => selectDate(day);
+                }
+                
+                grid.appendChild(cell);
+            }
+        }
+
+        function showBookingDetails(dateString) {
+            const booking = bookedDates[dateString];
+            if (isAdminMode) {
+                editBooking(dateString);
+            }
+        }
+
+        function selectDate(day) {
+            selectedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+            document.getElementById('bookingForm').style.display = 'block';
+        }
+
+        function submitBooking() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const notes = document.getElementById('notes').value;
+
+            if (!name || !email) {
+                alert('Please fill in required fields');
+                return;
+            }
+
+            const dateString = `${selectedDate.getFullYear()}-${selectedDate.getMonth() + 1}-${selectedDate.getDate()}`;
+            bookedDates[dateString] = {
+                name,
+                email,
+                notes
+            };
+
+            localStorage.setItem('bookedDates', JSON.stringify(bookedDates));
+            
+            alert('Booking confirmed!');
+            document.getElementById('bookingForm').style.display = 'none';
+            document.getElementById('name').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('notes').value = '';
+            
+            renderCalendar();
+        }
+
+        function previousMonth() {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar();
+        }
+
+        function nextMonth() {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar();
+        }
+
+        renderCalendar();
+    </script>
+</body>
+</html>
